@@ -31,7 +31,7 @@ func runUpdateCRL(cmd *cobra.Command, args []string) {
 	if err != nil {
 		panic(err)
 	}
-	err = operations.UpdateCRL(client, "cvpn-pki")
+	_, err = operations.UpdateCRL(client, "cvpn-pki")
 	if err != nil {
 		panic(err)
 	}

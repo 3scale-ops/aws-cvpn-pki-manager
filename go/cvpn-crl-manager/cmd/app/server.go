@@ -51,6 +51,7 @@ func runServer(cmd *cobra.Command, args []string) {
 	mux := mux.NewRouter()
 	mux.HandleFunc("/crl", getCRLHandler(client)).Methods(http.MethodGet)
 	mux.HandleFunc("/crl", updateCRLHandler(client)).Methods(http.MethodPost)
+	mux.HandleFunc("/issue/{user}", issueClientCertificateHandler(client)).Methods(http.MethodPost)
 	mux.HandleFunc("/revoke/{user}", revokeUserHandler(client)).Methods(http.MethodPost)
 	mux.HandleFunc("/users", listUsersHandler(client)).Methods(http.MethodGet)
 	// Add a logging middleware
@@ -62,12 +63,24 @@ func runServer(cmd *cobra.Command, args []string) {
 	log.Fatal(http.ListenAndServe(":"+serverOpts.port, loggedRouter))
 }
 
+func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		err := operations.IssueClientCertificate(client, "cvpn-pki", vars["user"], "cvpn-client")
+		if err != nil {
+			http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
+		}
+		fmt.Fprintln(w, "Done")
+	}
+}
+
 func revokeUserHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		err := operations.RevokeUser(client, "cvpn-pki", vars["user"])
 		if err != nil {
-			http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
+			log.Println(err.Error())
+			http.Error(w, "Internal error, couldn't revoke user "+vars["user"]+":\n", http.StatusInternalServerError)
 		}
 		fmt.Fprintln(w, "Done")
 	}
@@ -77,7 +90,8 @@ func getCRLHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		crl, err := operations.GetCRL(client, "cvpn-pki")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err.Error())
+			http.Error(w, "Internal error, coult'n retrieve the CRL", http.StatusInternalServerError)
 		}
 		fmt.Fprintln(w, string(crl))
 	}
@@ -86,16 +100,12 @@ func getCRLHandler(client *api.Client) http.HandlerFunc {
 func updateCRLHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Update the crl
-		err := operations.UpdateCRL(client, "cvpn-pki")
+		crl, err := operations.UpdateCRL(client, "cvpn-pki")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err.Error())
+			http.Error(w, "Internal error, CRL could not be updated", http.StatusInternalServerError)
 		}
 
-		// return the updated crl
-		crl, err := operations.GetCRL(client, "cvpn-pki")
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
 		fmt.Fprintln(w, string(crl))
 	}
 }
@@ -104,7 +114,8 @@ func listUsersHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		users, err := operations.ListUsers(client, "cvpn-pki")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Println(err.Error())
+			http.Error(w, "Internal error, could'n retrieve the user list", http.StatusInternalServerError)
 		}
 		b, err := json.MarshalIndent(users, "", "  ")
 		fmt.Fprintln(w, string(b))
