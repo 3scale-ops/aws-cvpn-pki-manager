@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
+	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +30,11 @@ func init() {
 }
 
 func runListUsers(cmd *cobra.Command, args []string) {
-	users, err := operations.ListUsers(vaultAddr, vaultToken, "cvpn-pki")
+	client, err := vault.NewClient(vaultAddr, vaultToken)
+	if err != nil {
+		panic(err)
+	}
+	users, err := operations.ListUsers(client, "cvpn-pki")
 	if err != nil {
 		panic(err)
 	}

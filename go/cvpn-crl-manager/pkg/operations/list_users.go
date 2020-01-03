@@ -9,24 +9,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
+	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 )
 
 // ListUsers retrieves the list of all Client VPN users and certificates
-func ListUsers(vaultAddr string, vaultToken string, pki string) (map[string][]Certificate, error) {
+func ListUsers(client *api.Client, pki string) (map[string][]Certificate, error) {
 	users := map[string][]Certificate{}
-	client, err := vault.NewClient(vaultAddr, vaultToken)
-	if err != nil {
-		return nil, err
-	}
 
 	secret, err := client.Logical().List(fmt.Sprintf("%s/certs", pki))
 	if err != nil {
 		return nil, err
 	}
 
-	crl, err := GetCRL(vaultAddr, vaultToken, pki)
+	crl, err := GetCRL(client, pki)
 	if err != nil {
 		return nil, err
 	}

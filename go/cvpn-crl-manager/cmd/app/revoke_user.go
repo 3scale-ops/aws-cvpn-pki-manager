@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
+	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,11 @@ func init() {
 }
 
 func runRevokeUser(cmd *cobra.Command, args []string) {
-	err := operations.RevokeUser(vaultAddr, vaultToken, "cvpn-pki", revokeUserOpts.user)
+	client, err := vault.NewClient(vaultAddr, vaultToken)
+	if err != nil {
+		panic(err)
+	}
+	err = operations.RevokeUser(client, "cvpn-pki", revokeUserOpts.user)
 	if err != nil {
 		panic(err)
 	}

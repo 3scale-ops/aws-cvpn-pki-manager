@@ -1,19 +1,12 @@
 package operations
 
-import (
-	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
-)
+import "github.com/hashicorp/vault/api"
 
 // RevokeUser revokes all the issued certificates for a given user
-func RevokeUser(vaultAddr string, vaultToken string, pki string, username string) error {
-
-	client, err := vault.NewClient(vaultAddr, vaultToken)
-	if err != nil {
-		return err
-	}
+func RevokeUser(client *api.Client, pki string, username string) error {
 
 	// Get the list of users
-	users, err := ListUsers(vaultAddr, vaultToken, pki)
+	users, err := ListUsers(client, pki)
 	err = revokeUserCertificates(client, pki, users[username], true)
 	if err != nil {
 		return err

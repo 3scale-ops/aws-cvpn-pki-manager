@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
+	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,11 @@ func init() {
 }
 
 func runGetCRL(cmd *cobra.Command, args []string) {
-	crl, err := operations.GetCRL(vaultAddr, vaultToken, "cvpn-pki")
+	client, err := vault.NewClient(vaultAddr, vaultToken)
+	if err != nil {
+		panic(err)
+	}
+	crl, err := operations.GetCRL(client, "cvpn-pki")
 	if err != nil {
 		panic(err)
 	}

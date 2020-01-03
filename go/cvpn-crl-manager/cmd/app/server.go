@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
+	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/hashicorp/vault/api"
 	"github.com/spf13/cobra"
 )
 
@@ -34,60 +38,75 @@ func init() {
 
 func runServer(cmd *cobra.Command, args []string) {
 
+	// Serve everything with our mux
+
+	// Create a singe shared cient to talk to the
+	// Vault server
+	client, err := vault.NewClient(vaultAddr, vaultToken)
+	if err != nil {
+		panic(err)
+	}
+
 	// Use gorilla/mux as http router
 	mux := mux.NewRouter()
-	mux.HandleFunc("/crl", httpGetCRL).Methods("GET")
-	mux.HandleFunc("/crl", httpUpdateCRL).Methods("POST")
-	mux.HandleFunc("/revoke/{user}", httpRevokeUser).Methods("POST")
-	mux.HandleFunc("/users", httpListUsers).Methods("GET")
-
-	// Serve everything with our mux
-	http.Handle("/", mux)
-
-	log.Print("Started server")
-	log.Printf("Listening on port :%v", serverOpts.port)
+	mux.HandleFunc("/crl", getCRLHandler(client)).Methods(http.MethodGet)
+	mux.HandleFunc("/crl", updateCRLHandler(client)).Methods(http.MethodPost)
+	mux.HandleFunc("/revoke/{user}", revokeUserHandler(client)).Methods(http.MethodPost)
+	mux.HandleFunc("/users", listUsersHandler(client)).Methods(http.MethodGet)
+	// Add a logging middleware
+	loggedRouter := handlers.CombinedLoggingHandler(os.Stdout, mux)
 
 	// Start the server
-	log.Fatal(http.ListenAndServe(":"+serverOpts.port, mux))
+	log.Print("Started server")
+	log.Printf("Listening on port :%v", serverOpts.port)
+	log.Fatal(http.ListenAndServe(":"+serverOpts.port, loggedRouter))
 }
 
-func httpRevokeUser(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	err := operations.RevokeUser(vaultAddr, vaultToken, "cvpn-pki", vars["user"])
-	if err != nil {
-		http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
+func revokeUserHandler(client *api.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		err := operations.RevokeUser(client, "cvpn-pki", vars["user"])
+		if err != nil {
+			http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
+		}
+		fmt.Fprintln(w, "Done")
 	}
-	fmt.Fprintln(w, "Done")
 }
 
-func httpGetCRL(w http.ResponseWriter, r *http.Request) {
-	crl, err := operations.GetCRL(vaultAddr, vaultToken, "cvpn-pki")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+func getCRLHandler(client *api.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		crl, err := operations.GetCRL(client, "cvpn-pki")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		fmt.Fprintln(w, string(crl))
 	}
-	fmt.Fprintln(w, string(crl))
 }
 
-func httpUpdateCRL(w http.ResponseWriter, r *http.Request) {
-	// Update the crl
-	err := operations.UpdateCRL(vaultAddr, vaultToken, "cvpn-pki")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+func updateCRLHandler(client *api.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Update the crl
+		err := operations.UpdateCRL(client, "cvpn-pki")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 
-	// return the updated crl
-	crl, err := operations.GetCRL(vaultAddr, vaultToken, "cvpn-pki")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// return the updated crl
+		crl, err := operations.GetCRL(client, "cvpn-pki")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		fmt.Fprintln(w, string(crl))
 	}
-	fmt.Fprintln(w, string(crl))
 }
 
-func httpListUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := operations.ListUsers(vaultAddr, vaultToken, "cvpn-pki")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+func listUsersHandler(client *api.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		users, err := operations.ListUsers(client, "cvpn-pki")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		b, err := json.MarshalIndent(users, "", "  ")
+		fmt.Fprintln(w, string(b))
 	}
-	b, err := json.MarshalIndent(users, "", "  ")
-	fmt.Fprintln(w, string(b))
 }

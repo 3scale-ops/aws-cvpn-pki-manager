@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
+	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,11 @@ func init() {
 }
 
 func runUpdateCRL(cmd *cobra.Command, args []string) {
-	err := operations.UpdateCRL(vaultAddr, vaultToken, "cvpn-pki")
+	client, err := vault.NewClient(vaultAddr, vaultToken)
+	if err != nil {
+		panic(err)
+	}
+	err = operations.UpdateCRL(client, "cvpn-pki")
 	if err != nil {
 		panic(err)
 	}

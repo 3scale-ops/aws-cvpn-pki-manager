@@ -4,22 +4,19 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
 	"github.com/hashicorp/vault/api"
 )
 
 // UpdateCRL maintains the CRL to keep just one active certificte per
 // VPN user. This will always be the one emitted at a later date. Users
 // can also have all their certificates revoked.
-func UpdateCRL(vaultAddr string, vaultToken string, pki string) error {
+func UpdateCRL(client *api.Client, pki string) error {
 
-	client, err := vault.NewClient(vaultAddr, vaultToken)
+	// Get the list of users
+	users, err := ListUsers(client, pki)
 	if err != nil {
 		return err
 	}
-
-	// Get the list of users
-	users, err := ListUsers(vaultAddr, vaultToken, pki)
 
 	//For each user, get the list of certificates, and revoke all of the but the latest
 	for _, crts := range users {
