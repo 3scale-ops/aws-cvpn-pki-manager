@@ -17,7 +17,9 @@ import (
 
 // serverOptions is the options for the command
 type serverOptions struct {
-	port string
+	port                string
+	clientVPNEndpointID string
+	vaultPKI            string
 }
 
 var serverOpts serverOptions
@@ -34,13 +36,14 @@ var serverCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(serverCmd)
 	serverCmd.Flags().StringVar(&serverOpts.port, "port", "8080", "Port to listen at")
+	serverCmd.Flags().StringVar(&serverOpts.clientVPNEndpointID, "client-vpn-endpoint-id", "", "The AWS Client VPN endpoint ID")
+	serverCmd.MarkFlagRequired("client-vpn-endpoint-id")
+	serverCmd.Flags().StringVar(&serverOpts.vaultPKI, "vault-pki", "pki", "The Vault PKI engine mount path")
 }
 
 func runServer(cmd *cobra.Command, args []string) {
 
-	// Serve everything with our mux
-
-	// Create a singe shared cient to talk to the
+	// Create a single shared cient to talk to the
 	// Vault server
 	client, err := vault.NewClient(vaultAddr, vaultToken)
 	if err != nil {
@@ -66,7 +69,15 @@ func runServer(cmd *cobra.Command, args []string) {
 func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		err := operations.IssueClientCertificate(client, "cvpn-pki", vars["user"], "cvpn-client")
+		err := operations.IssueClientCertificate(
+			&operations.IssueCertificateRequest{
+				Client:              client,
+				PKIPath:             serverOpts.vaultPKI,
+				PKIRole:             "cvpn-client",
+				Username:            vars["user"],
+				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
+				KVPath:              "secret",
+			})
 		if err != nil {
 			http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
 		}
@@ -77,7 +88,13 @@ func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
 func revokeUserHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
-		err := operations.RevokeUser(client, "cvpn-pki", vars["user"])
+		err := operations.RevokeUser(
+			&operations.RevokeUserRequest{
+				Client:              client,
+				PKIPath:             serverOpts.vaultPKI,
+				Username:            vars["user"],
+				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
+			})
 		if err != nil {
 			log.Println(err.Error())
 			http.Error(w, "Internal error, couldn't revoke user "+vars["user"]+":\n", http.StatusInternalServerError)
@@ -88,7 +105,11 @@ func revokeUserHandler(client *api.Client) http.HandlerFunc {
 
 func getCRLHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		crl, err := operations.GetCRL(client, "cvpn-pki")
+		crl, err := operations.GetCRL(
+			&operations.GetCRLRequest{
+				Client:  client,
+				PKIPath: serverOpts.vaultPKI,
+			})
 		if err != nil {
 			log.Println(err.Error())
 			http.Error(w, "Internal error, coult'n retrieve the CRL", http.StatusInternalServerError)
@@ -100,7 +121,12 @@ func getCRLHandler(client *api.Client) http.HandlerFunc {
 func updateCRLHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Update the crl
-		crl, err := operations.UpdateCRL(client, "cvpn-pki")
+		crl, err := operations.UpdateCRL(
+			&operations.UpdateCRLRequest{
+				Client:              client,
+				PKIPath:             serverOpts.vaultPKI,
+				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
+			})
 		if err != nil {
 			log.Println(err.Error())
 			http.Error(w, "Internal error, CRL could not be updated", http.StatusInternalServerError)
@@ -112,7 +138,11 @@ func updateCRLHandler(client *api.Client) http.HandlerFunc {
 
 func listUsersHandler(client *api.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		users, err := operations.ListUsers(client, "cvpn-pki")
+		users, err := operations.ListUsers(
+			&operations.ListUsersRequest{
+				Client:  client,
+				PKIPath: serverOpts.vaultPKI,
+			})
 		if err != nil {
 			log.Println(err.Error())
 			http.Error(w, "Internal error, could'n retrieve the user list", http.StatusInternalServerError)

@@ -13,22 +13,35 @@ import (
 	"github.com/pkg/errors"
 )
 
+// ListUsersRequest is the structure containing
+// the required data to issue a new certificate
+type ListUsersRequest struct {
+	Client              *api.Client
+	PKIPath             string
+	ClientVPNEndpointID string
+}
+
 // ListUsers retrieves the list of all Client VPN users and certificates
-func ListUsers(client *api.Client, pki string) (map[string][]Certificate, error) {
+func ListUsers(r *ListUsersRequest) (map[string][]Certificate, error) {
 	users := map[string][]Certificate{}
 
-	secret, err := client.Logical().List(fmt.Sprintf("%s/certs", pki))
+	secret, err := r.Client.Logical().List(fmt.Sprintf("%s/certs", r.PKIPath))
 	if err != nil {
 		return nil, err
 	}
 
-	crl, err := GetCRL(client, pki)
+	// Get the updated CRL
+	crl, err := GetCRL(
+		&GetCRLRequest{
+			Client:  r.Client,
+			PKIPath: r.PKIPath,
+		})
 	if err != nil {
 		return nil, err
 	}
 
 	for _, key := range secret.Data["keys"].([]interface{}) {
-		secret, err := client.Logical().Read(fmt.Sprintf("%s/cert/%s", pki, key))
+		secret, err := r.Client.Logical().Read(fmt.Sprintf("%s/cert/%s", r.PKIPath, key))
 		if err != nil {
 			return nil, err
 		}
@@ -81,12 +94,30 @@ func ListUsers(client *api.Client, pki string) (map[string][]Certificate, error)
 	return users, nil
 }
 
+// RevokeUserRequest is the structure containing
+// the required data to issue a new certificate
+type RevokeUserRequest struct {
+	Client              *api.Client
+	PKIPath             string
+	Username            string
+	ClientVPNEndpointID string
+}
+
 // RevokeUser revokes all the issued certificates for a given user
-func RevokeUser(client *api.Client, pki string, username string) error {
+func RevokeUser(r *RevokeUserRequest) error {
 
 	// Get the list of users
-	users, err := ListUsers(client, pki)
-	err = revokeUserCertificates(client, pki, users[username], true)
+	users, err := ListUsers(
+		&ListUsersRequest{
+			Client:              r.Client,
+			PKIPath:             r.PKIPath,
+			ClientVPNEndpointID: r.ClientVPNEndpointID,
+		})
+	if err != nil {
+		return err
+	}
+
+	err = revokeUserCertificates(r.Client, r.PKIPath, users[r.Username], true)
 	if err != nil {
 		return err
 	}
