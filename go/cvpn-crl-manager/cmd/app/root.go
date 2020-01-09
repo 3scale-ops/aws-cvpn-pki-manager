@@ -11,7 +11,7 @@ import (
 var (
 	// rootCmd represents the base command when called without any subcommands
 	rootCmd = &cobra.Command{
-		Use:   "cvpn-crl-manager",
+		Use:   "aws-cvpn-pki-manager",
 		Short: "Client VPN Client Revocation List (CRL) management",
 	}
 	vaultAddr  string

@@ -41,7 +41,7 @@ func init() {
 	serverCmd.Flags().StringVar(&serverOpts.port, "port", "8080", "Port to listen at")
 	serverCmd.Flags().StringVar(&serverOpts.clientVPNEndpointID, "client-vpn-endpoint-id", "", "The AWS Client VPN endpoint ID")
 	serverCmd.MarkFlagRequired("client-vpn-endpoint-id")
-	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{"cvpn-pki", "root-pki"}, "The paths where the root CA and any intermediate CAs live in Vault")
+	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{"cvpn-pki", "root-pki"}, "The paths where the root CA and any intermediate CAs live in Vault. Must be sorted, the rootCA PKI path has to be last one")
 	serverCmd.Flags().StringVar(&serverOpts.vaultClientCrtRole, "vault-client-certificate-role", "client", "The Vault role used to issue VPN client certificates")
 	serverCmd.Flags().StringVar(&serverOpts.vaultKVPath, "vault-kv-store-path", "secret", "The Vault path for the kv (v2) storage engine where VPN configs will be stored")
 	serverCmd.Flags().StringVar(&serverOpts.CfgTplPath, "config-template-path", "./config.ovpn.tpl", "The OpenVPN config template")
