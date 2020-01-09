@@ -3,7 +3,6 @@ package operations
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -83,24 +82,4 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 	}
 
 	return crl, nil
-}
-
-// revokeUserCertificates receives a list of certificates, sorted from oldest to newest, and revokes
-// all but the latest if "revokeAll" is false and all of them if "revokeAll" is true.
-func revokeUserCertificates(client *api.Client, pki string, crts []Certificate, revokeAll bool) error {
-
-	for n, crt := range crts {
-		// Do not revoke the last certificate
-		if n == len(crts)-1 && revokeAll == false {
-			break
-		}
-		if crt.Revoked == false {
-			payload := make(map[string]interface{})
-			payload["serial_number"] = crt.SerialNumber
-			log.Printf("Revoke cert %s\n", crt.SerialNumber)
-			client.Logical().Write(fmt.Sprintf("%s/revoke", pki), payload)
-		}
-	}
-
-	return nil
 }

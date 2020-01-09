@@ -19,7 +19,10 @@ import (
 type serverOptions struct {
 	port                string
 	clientVPNEndpointID string
-	vaultPKI            string
+	vaultPKIPaths       []string
+	vaultClientCrtRole  string
+	vaultKVPath         string
+	CfgTplPath          string
 }
 
 var serverOpts serverOptions
@@ -38,7 +41,10 @@ func init() {
 	serverCmd.Flags().StringVar(&serverOpts.port, "port", "8080", "Port to listen at")
 	serverCmd.Flags().StringVar(&serverOpts.clientVPNEndpointID, "client-vpn-endpoint-id", "", "The AWS Client VPN endpoint ID")
 	serverCmd.MarkFlagRequired("client-vpn-endpoint-id")
-	serverCmd.Flags().StringVar(&serverOpts.vaultPKI, "vault-pki", "pki", "The Vault PKI engine mount path")
+	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{"cvpn-pki", "root-pki"}, "The paths where the root CA and any intermediate CAs live in Vault")
+	serverCmd.Flags().StringVar(&serverOpts.vaultClientCrtRole, "vault-client-certificate-role", "client", "The Vault role used to issue VPN client certificates")
+	serverCmd.Flags().StringVar(&serverOpts.vaultKVPath, "vault-kv-store-path", "secret", "The Vault path for the kv (v2) storage engine where VPN configs will be stored")
+	serverCmd.Flags().StringVar(&serverOpts.CfgTplPath, "config-template-path", "./config.ovpn.tpl", "The OpenVPN config template")
 }
 
 func runServer(cmd *cobra.Command, args []string) {
@@ -72,16 +78,18 @@ func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
 		err := operations.IssueClientCertificate(
 			&operations.IssueCertificateRequest{
 				Client:              client,
-				PKIPath:             serverOpts.vaultPKI,
-				PKIRole:             "cvpn-client",
+				VaultPKIPaths:       serverOpts.vaultPKIPaths,
+				PKIRole:             serverOpts.vaultClientCrtRole,
 				Username:            vars["user"],
 				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
-				KVPath:              "secret",
+				VaultKVPath:         serverOpts.vaultKVPath,
+				CfgTplPath:          serverOpts.CfgTplPath,
 			})
 		if err != nil {
-			http.Error(w, "Couldn't revoke user "+vars["user"]+":\n"+err.Error(), http.StatusInternalServerError)
+			http.Error(w, jsonOutput(map[string]string{"error": "couldn't revoke user " + vars["user"] + ":\n" + err.Error()}), http.StatusInternalServerError)
+			return
 		}
-		fmt.Fprintln(w, "Done")
+		fmt.Fprintln(w, jsonOutput(map[string]string{"result": "success"}))
 	}
 }
 
@@ -91,15 +99,16 @@ func revokeUserHandler(client *api.Client) http.HandlerFunc {
 		err := operations.RevokeUser(
 			&operations.RevokeUserRequest{
 				Client:              client,
-				PKIPath:             serverOpts.vaultPKI,
+				PKIPath:             serverOpts.vaultPKIPaths[0],
 				Username:            vars["user"],
 				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
 			})
 		if err != nil {
 			log.Println(err.Error())
-			http.Error(w, "Internal error, couldn't revoke user "+vars["user"]+":\n", http.StatusInternalServerError)
+			http.Error(w, jsonOutput(map[string]string{"error": "internal error, couldn't revoke user " + vars["user"] + ":\n" + err.Error()}), http.StatusInternalServerError)
+			return
 		}
-		fmt.Fprintln(w, "Done")
+		fmt.Fprintln(w, jsonOutput(map[string]string{"result": "success"}))
 	}
 }
 
@@ -108,13 +117,14 @@ func getCRLHandler(client *api.Client) http.HandlerFunc {
 		crl, err := operations.GetCRL(
 			&operations.GetCRLRequest{
 				Client:  client,
-				PKIPath: serverOpts.vaultPKI,
+				PKIPath: serverOpts.vaultPKIPaths[0],
 			})
 		if err != nil {
 			log.Println(err.Error())
-			http.Error(w, "Internal error, coult'n retrieve the CRL", http.StatusInternalServerError)
+			http.Error(w, jsonOutput(map[string]string{"error": "internal error, coult'n retrieve the CRL:\n" + err.Error()}), http.StatusInternalServerError)
+			return
 		}
-		fmt.Fprintln(w, string(crl))
+		fmt.Fprintln(w, jsonOutput(map[string]string{"crl": string(crl)}))
 	}
 }
 
@@ -124,12 +134,14 @@ func updateCRLHandler(client *api.Client) http.HandlerFunc {
 		crl, err := operations.UpdateCRL(
 			&operations.UpdateCRLRequest{
 				Client:              client,
-				PKIPath:             serverOpts.vaultPKI,
+				PKIPath:             serverOpts.vaultPKIPaths[0],
 				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
 			})
 		if err != nil {
 			log.Println(err.Error())
-			http.Error(w, "Internal error, CRL could not be updated", http.StatusInternalServerError)
+			http.Error(w, jsonOutput(map[string]string{"error": "internal error, CRL could not be updated:\n" + err.Error()}), http.StatusInternalServerError)
+
+			return
 		}
 
 		fmt.Fprintln(w, string(crl))
@@ -141,13 +153,22 @@ func listUsersHandler(client *api.Client) http.HandlerFunc {
 		users, err := operations.ListUsers(
 			&operations.ListUsersRequest{
 				Client:  client,
-				PKIPath: serverOpts.vaultPKI,
+				PKIPath: serverOpts.vaultPKIPaths[0],
 			})
 		if err != nil {
 			log.Println(err.Error())
-			http.Error(w, "Internal error, could'n retrieve the user list", http.StatusInternalServerError)
+			http.Error(w, jsonOutput(map[string]string{"error": "internal error, could not retrieve the user list:\n" + err.Error()}), http.StatusInternalServerError)
+			return
 		}
 		b, err := json.MarshalIndent(users, "", "  ")
 		fmt.Fprintln(w, string(b))
 	}
+}
+
+func jsonOutput(rsp map[string]string) string {
+	b, err := json.MarshalIndent(rsp, "", "  ")
+	if err != nil {
+		log.Panic("Error marhsalling the response json")
+	}
+	return string(b)
 }
