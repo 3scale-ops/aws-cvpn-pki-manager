@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/operations"
-	"github.com/3scale/platform/go/cvpn-ctl-manager/pkg/vault"
+	"github.com/3scale/aws-cvpn-pki-manager/pkg/operations"
+	"github.com/3scale/aws-cvpn-pki-manager/pkg/vault"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/vault/api"
