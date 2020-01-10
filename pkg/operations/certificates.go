@@ -17,21 +17,13 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
-// type templateData struct {
-// 	DNSName     string
-// 	Username    string
-// 	CA          string
-// 	Certificate string
-// 	PrivateKey  string
-// }
-
 // IssueCertificateRequest is the structure containing
 // the required data to issue a new certificate
 type IssueCertificateRequest struct {
 	Client              *api.Client
 	VaultPKIPaths       []string
 	Username            string
-	PKIRole             string
+	VaultPKIRole        string
 	ClientVPNEndpointID string
 	VaultKVPath         string
 	CfgTplPath          string
@@ -55,7 +47,7 @@ func IssueClientCertificate(r *IssueCertificateRequest) error {
 	// Issue a new certificate
 	payload := make(map[string]interface{})
 	payload["common_name"] = r.Username
-	crt, err := r.Client.Logical().Write(fmt.Sprintf("%s/issue/%s", r.VaultPKIPaths[0], r.PKIRole), payload)
+	crt, err := r.Client.Logical().Write(fmt.Sprintf("%s/issue/%s", r.VaultPKIPaths[0], r.VaultPKIRole), payload)
 	if err != nil {
 		return err
 	}

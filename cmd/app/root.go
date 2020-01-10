@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,17 +28,14 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
 	rootCmd.PersistentFlags().StringVar(&vaultAddr, "vault-addr", "", "Full URL of the vault server")
-	rootCmd.MarkFlagRequired("vault-addr")
-	rootCmd.PersistentFlags().StringVar(&vaultToken, "vault-token", "", "The token to authenticate to the vault server")
-	// getCRLCmd.MarkFlagRequired("vault-token")
-
 	viper.BindPFlag("vault-addr", rootCmd.PersistentFlags().Lookup("vault-addr"))
-	viper.BindPFlag("vault-token", rootCmd.PersistentFlags().Lookup("vault-token"))
-}
+	viper.SetDefault("vault-addr", "http://127.0.0.1:8200")
 
-// initConfig reads ENV variables if set.
-func initConfig() {
-	viper.AutomaticEnv() // read in environment variables that match
+	rootCmd.PersistentFlags().StringVar(&vaultToken, "vault-token", "", "The token to authenticate to the vault server")
+	viper.BindPFlag("vault-token", rootCmd.PersistentFlags().Lookup("vault-token"))
+
+	viper.SetEnvPrefix("ACPM")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
 }

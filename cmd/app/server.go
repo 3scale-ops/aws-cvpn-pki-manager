@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/vault/api"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 // serverOptions is the options for the command
@@ -32,26 +33,77 @@ var serverCmd = &cobra.Command{
 	Use:     "server",
 	Short:   "Starts a server that will listen for http requests",
 	Long:    "",
-	Example: "cvpn-crl-manager server --vault-server http://localhost:8200 --vault-token s.XXXXXXXXX",
+	Example: "aws-cvpn-pki-manager server --vault-server http://localhost:8200 --vault-token s.XXXXXXXXX --client-vpn-endpoint-id cvpn-endpoint-0873f24b07b72b3ee",
 	Run:     runServer,
 }
 
 func init() {
 	rootCmd.AddCommand(serverCmd)
-	serverCmd.Flags().StringVar(&serverOpts.port, "port", "8080", "Port to listen at")
+	cobra.OnInitialize(initConfig)
+
+	serverCmd.Flags().StringVar(&serverOpts.port, "port", "", "Port to listen at")
+	viper.BindPFlag("port", serverCmd.Flags().Lookup("port"))
+	viper.SetDefault("port", "8080")
+
 	serverCmd.Flags().StringVar(&serverOpts.clientVPNEndpointID, "client-vpn-endpoint-id", "", "The AWS Client VPN endpoint ID")
-	serverCmd.MarkFlagRequired("client-vpn-endpoint-id")
-	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{"cvpn-pki", "root-pki"}, "The paths where the root CA and any intermediate CAs live in Vault. Must be sorted, the rootCA PKI path has to be last one")
-	serverCmd.Flags().StringVar(&serverOpts.vaultClientCrtRole, "vault-client-certificate-role", "client", "The Vault role used to issue VPN client certificates")
-	serverCmd.Flags().StringVar(&serverOpts.vaultKVPath, "vault-kv-store-path", "secret", "The Vault path for the kv (v2) storage engine where VPN configs will be stored")
+	viper.BindPFlag("client-vpn-endpoint-id", serverCmd.Flags().Lookup("client-vpn-endpoint-id"))
+
+	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{}, "The paths where the root CA and any intermediate CAs live in Vault. Must be sorted, the rootCA PKI path has to be last one")
+	viper.BindPFlag("vault-pki-paths", serverCmd.Flags().Lookup("vault-pki-paths"))
+	viper.SetDefault("vault-pki-paths", []string{"cvpn-pki", "root-pki"})
+
+	serverCmd.Flags().StringVar(&serverOpts.vaultClientCrtRole, "vault-client-certificate-role", "", "The Vault role used to issue VPN client certificates")
+	viper.BindPFlag("vault-client-certificate-role", serverCmd.Flags().Lookup("vault-client-certificate-role"))
+	viper.SetDefault("vault-client-certificate-role", "client")
+
+	serverCmd.Flags().StringVar(&serverOpts.vaultKVPath, "vault-kv-path", "secret", "The Vault path for the kv (v2) storage engine where VPN configs will be stored")
+	viper.BindPFlag("vault-kv-path", serverCmd.Flags().Lookup("vault-kv-path"))
+	viper.SetDefault("vault-kv-path", "secret")
+
 	serverCmd.Flags().StringVar(&serverOpts.CfgTplPath, "config-template-path", "./config.ovpn.tpl", "The OpenVPN config template")
+	viper.BindPFlag("config-template-path", serverCmd.Flags().Lookup("config-template-path"))
+	viper.SetDefault("config-template-path", "./config.ovpn.tpl")
+}
+
+func initConfig() {
+	keys := []string{
+		"port",
+		"vault-addr",
+		"vault-token",
+		"client-vpn-endpoint-id",
+		"vault-pki-paths",
+		"vault-client-certificate-role",
+		"vault-kv-path",
+		"config-template-path",
+	}
+
+	for _, k := range keys {
+		if !viper.IsSet(k) {
+			log.Panicf("Required configuration option '%s' is not set", k)
+		}
+	}
+
+	format := `Loaded config:
+			vault-addr: %s
+			vault-token: ****************
+			client-vpn-endpoint-id: %s
+			vault-pki-paths: %s
+			vault-client-certificate-role: %s
+			vault-kv-store-path: %s
+			config-template-path: %s
+	`
+
+	log.Printf(format, viper.GetString("vault-addr"), viper.GetString("client-vpn-endpoint-id"),
+		viper.GetStringSlice("vault-pki-paths"), viper.GetString("vault-client-certificate-role"),
+		viper.GetString("vault-kv-path"), viper.GetString("config-template-path"))
+
 }
 
 func runServer(cmd *cobra.Command, args []string) {
 
 	// Create a single shared cient to talk to the
 	// Vault server
-	client, err := vault.NewClient(vaultAddr, vaultToken)
+	client, err := vault.NewClient(viper.GetString("vault-addr"), viper.GetString("vault-token"))
 	if err != nil {
 		panic(err)
 	}
@@ -68,8 +120,8 @@ func runServer(cmd *cobra.Command, args []string) {
 
 	// Start the server
 	log.Print("Started server")
-	log.Printf("Listening on port :%v", serverOpts.port)
-	log.Fatal(http.ListenAndServe(":"+serverOpts.port, loggedRouter))
+	log.Printf("Listening on port :%v", viper.GetString("port"))
+	log.Fatal(http.ListenAndServe(":"+viper.GetString("port"), loggedRouter))
 }
 
 func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
@@ -78,12 +130,12 @@ func issueClientCertificateHandler(client *api.Client) http.HandlerFunc {
 		err := operations.IssueClientCertificate(
 			&operations.IssueCertificateRequest{
 				Client:              client,
-				VaultPKIPaths:       serverOpts.vaultPKIPaths,
-				PKIRole:             serverOpts.vaultClientCrtRole,
+				VaultPKIPaths:       viper.GetStringSlice("vault-pki-paths"),          //serverOpts.vaultPKIPaths,
+				VaultPKIRole:        viper.GetString("vault-client-certificate-role"), //serverOpts.vaultClientCrtRole,
 				Username:            vars["user"],
-				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
-				VaultKVPath:         serverOpts.vaultKVPath,
-				CfgTplPath:          serverOpts.CfgTplPath,
+				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"), //serverOpts.clientVPNEndpointID,
+				VaultKVPath:         viper.GetString("vault-kv-path"),          //serverOpts.vaultKVPath,
+				CfgTplPath:          viper.GetString("config-template-path"),   //serverOpts.CfgTplPath,
 			})
 		if err != nil {
 			http.Error(w, jsonOutput(map[string]string{"error": "couldn't revoke user " + vars["user"] + ":\n" + err.Error()}), http.StatusInternalServerError)
@@ -99,9 +151,9 @@ func revokeUserHandler(client *api.Client) http.HandlerFunc {
 		err := operations.RevokeUser(
 			&operations.RevokeUserRequest{
 				Client:              client,
-				PKIPath:             serverOpts.vaultPKIPaths[0],
+				PKIPath:             viper.GetStringSlice("vault-pki-paths")[0],
 				Username:            vars["user"],
-				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
+				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"),
 			})
 		if err != nil {
 			log.Println(err.Error())
@@ -117,7 +169,7 @@ func getCRLHandler(client *api.Client) http.HandlerFunc {
 		crl, err := operations.GetCRL(
 			&operations.GetCRLRequest{
 				Client:  client,
-				PKIPath: serverOpts.vaultPKIPaths[0],
+				PKIPath: viper.GetStringSlice("vault-pki-paths")[0],
 			})
 		if err != nil {
 			log.Println(err.Error())
@@ -134,8 +186,8 @@ func updateCRLHandler(client *api.Client) http.HandlerFunc {
 		crl, err := operations.UpdateCRL(
 			&operations.UpdateCRLRequest{
 				Client:              client,
-				PKIPath:             serverOpts.vaultPKIPaths[0],
-				ClientVPNEndpointID: serverOpts.clientVPNEndpointID,
+				PKIPath:             viper.GetStringSlice("vault-pki-paths")[0],
+				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"),
 			})
 		if err != nil {
 			log.Println(err.Error())
@@ -153,7 +205,7 @@ func listUsersHandler(client *api.Client) http.HandlerFunc {
 		users, err := operations.ListUsers(
 			&operations.ListUsersRequest{
 				Client:  client,
-				PKIPath: serverOpts.vaultPKIPaths[0],
+				PKIPath: viper.GetStringSlice("vault-pki-paths")[0],
 			})
 		if err != nil {
 			log.Println(err.Error())
