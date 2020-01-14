@@ -27,11 +27,12 @@ type IssueCertificateRequest struct {
 	ClientVPNEndpointID string
 	VaultKVPath         string
 	CfgTplPath          string
+	Temporary           bool
 }
 
 // IssueClientCertificate generates a new certificate for a given users, causing
 // the revocation of other certificates emitted for that same user
-func IssueClientCertificate(r *IssueCertificateRequest) error {
+func IssueClientCertificate(r *IssueCertificateRequest) (string, error) {
 
 	// Init the struct to pass to the config.ovpn.tpl template
 	data := struct {
@@ -49,7 +50,7 @@ func IssueClientCertificate(r *IssueCertificateRequest) error {
 	payload["common_name"] = r.Username
 	crt, err := r.Client.Logical().Write(fmt.Sprintf("%s/issue/%s", r.VaultPKIPaths[0], r.VaultPKIRole), payload)
 	if err != nil {
-		return err
+		return "", err
 	}
 	data.Certificate = crt.Data["certificate"].(string)
 	data.PrivateKey = crt.Data["private_key"].(string)
@@ -62,11 +63,13 @@ func IssueClientCertificate(r *IssueCertificateRequest) error {
 		req := r.Client.NewRequest("GET", fmt.Sprintf("/v1/%s/ca/pem", path))
 		raw, err := r.Client.RawRequest(req)
 		if err != nil {
-			return err
+			return "", err
 		}
 		defer raw.Body.Close()
 		ca, err := ioutil.ReadAll(raw.Body)
-		// data.rootCA = string(ca)
+		if err != nil {
+			return "", err
+		}
 		caCerts = append(caCerts, string(ca))
 	}
 	data.CA = strings.Join(caCerts, "\n")
@@ -76,7 +79,7 @@ func IssueClientCertificate(r *IssueCertificateRequest) error {
 	rsp, err := svc.DescribeClientVpnEndpoints(
 		&ec2.DescribeClientVpnEndpointsInput{ClientVpnEndpointIds: aws.StringSlice([]string{r.ClientVPNEndpointID})})
 	if err != nil {
-		return err
+		return "", err
 	}
 	// AWS returns the DNSName with an asterisk at the beginning, meaning that any subdomain
 	// of the VPN's endpoint domain is valid. We need to strip this from the dns to use it
@@ -88,35 +91,37 @@ func IssueClientCertificate(r *IssueCertificateRequest) error {
 	// Resolve the config.ovpn.tpl template
 	tpl, err := template.New(path.Base(r.CfgTplPath)).ParseFiles(r.CfgTplPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 	var config bytes.Buffer
 	if err := tpl.Execute(&config, data); err != nil {
-		return err
+		return "", err
 	}
 
-	// create/update the vpn config in the kv store
-	payload["data"] = map[string]string{
-		"content": config.String(),
-	}
-	_, err = r.Client.Logical().Write(fmt.Sprintf("%s/data/users/%s/config.ovpn", r.VaultKVPath, r.Username), payload)
-	if err != nil {
-		return err
+	if !r.Temporary {
+		// create/update the vpn config in the kv store
+		payload["data"] = map[string]string{
+			"content": config.String(),
+		}
+		_, err = r.Client.Logical().Write(fmt.Sprintf("%s/data/users/%s/config.ovpn", r.VaultKVPath, r.Username), payload)
+		if err != nil {
+			return "", err
+		}
+
+		// Call UpdateCRL to revoke all other certificates
+		_, err = UpdateCRL(
+			&UpdateCRLRequest{
+				Client:              r.Client,
+				PKIPath:             r.VaultPKIPaths[0],
+				ClientVPNEndpointID: r.ClientVPNEndpointID,
+			})
+
+		if err != nil {
+			return "", err
+		}
 	}
 
-	// Call UpdateCRL to revoke all other certificates
-	_, err = UpdateCRL(
-		&UpdateCRLRequest{
-			Client:              r.Client,
-			PKIPath:             r.VaultPKIPaths[0],
-			ClientVPNEndpointID: r.ClientVPNEndpointID,
-		})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return config.String(), nil
 }
 
 // revokeUserCertificates receives a list of certificates, sorted from oldest to newest, and revokes

@@ -15,8 +15,7 @@ var (
 		Use:   "aws-cvpn-pki-manager",
 		Short: "Client VPN Client Revocation List (CRL) management",
 	}
-	vaultAddr  string
-	vaultToken string
+	vaultAddr string
 )
 
 // Execute runs the app
@@ -31,9 +30,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&vaultAddr, "vault-addr", "", "Full URL of the vault server")
 	viper.BindPFlag("vault-addr", rootCmd.PersistentFlags().Lookup("vault-addr"))
 	viper.SetDefault("vault-addr", "http://127.0.0.1:8200")
-
-	rootCmd.PersistentFlags().StringVar(&vaultToken, "vault-token", "", "The token to authenticate to the vault server")
-	viper.BindPFlag("vault-token", rootCmd.PersistentFlags().Lookup("vault-token"))
 
 	viper.SetEnvPrefix("ACPM")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))

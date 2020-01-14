@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/hashicorp/vault/api"
@@ -77,7 +78,7 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 			ClientVpnEndpointId:       aws.String(r.ClientVPNEndpointID),
 		})
 
-	if err != nil {
+	if err != nil && err.(awserr.Error).Code() != "InvalidParameterValue" {
 		return nil, err
 	}
 

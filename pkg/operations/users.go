@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
@@ -61,10 +60,8 @@ func ListUsers(r *ListUsersRequest) (map[string][]Certificate, error) {
 			continue
 		}
 
-		// TODO: get the system's timezone instead of hardcoding it
-		jst := time.FixedZone("Europe/Madrid", 9*60*60)
-		notBefore := cert.NotBefore.In(jst)
-		notAfter := cert.NotAfter.In(jst)
+		notBefore := cert.NotBefore.Local()
+		notAfter := cert.NotAfter.Local()
 		serial := strings.TrimSpace(getHexFormatted(cert.SerialNumber.Bytes(), "-"))
 		revoked, err := isRevoked(serial, crl)
 		if err != nil {
