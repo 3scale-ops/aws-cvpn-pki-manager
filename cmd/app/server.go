@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/3scale/aws-cvpn-pki-manager/pkg/operations"
@@ -186,7 +187,19 @@ func issueClientCertificateHandler(vc vault.AuthenticatedClient) http.HandlerFun
 
 		vars := mux.Vars(r)
 
-		if r.URL.Query()["temp"][0] == "true" {
+		var temp bool
+		if _, ok := r.URL.Query()["temp"]; ok {
+			temp, err = strconv.ParseBool(r.URL.Query()["temp"][0])
+			if err != nil {
+				http.Error(w, jsonOutput(map[string]string{"error": "incorrect value for parameter 'temp'. Use one of: true/false"}), http.StatusInternalServerError)
+				return
+			}
+
+		} else {
+			temp = false
+		}
+
+		if temp {
 			if role, ok := r.URL.Query()["role"]; ok {
 				//do something here
 				cfg, err := operations.IssueClientCertificate(
