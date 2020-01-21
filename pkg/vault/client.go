@@ -64,9 +64,6 @@ type ApproleAuthenticatedClient struct {
 // approleSecretID string, approleRoleID string,
 func (aac *ApproleAuthenticatedClient) GetClient() (*api.Client, error) {
 
-	// spew.Dump(aac.client.Token())
-	// spew.Dump(aac.tokenExpires)
-
 	// If token not empty and still valid (with a margin of 60 seconds)
 	if aac.client != nil && aac.client.Token() != "" && time.Now().Add(60*time.Second).Before(aac.tokenExpires) {
 		// the token, and therefor the client, are still valid for use

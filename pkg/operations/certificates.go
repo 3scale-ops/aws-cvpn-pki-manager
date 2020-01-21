@@ -13,7 +13,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 
-	// "github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/vault/api"
 )
 
@@ -85,8 +84,6 @@ func IssueClientCertificate(r *IssueCertificateRequest) (string, error) {
 	// of the VPN's endpoint domain is valid. We need to strip this from the dns to use it
 	// in the config
 	data.DNSName = strings.SplitN(*rsp.ClientVpnEndpoints[0].DnsName, ".", 2)[1]
-
-	// spew.Dump(data)
 
 	// Resolve the config.ovpn.tpl template
 	tpl, err := template.New(path.Base(r.CfgTplPath)).ParseFiles(r.CfgTplPath)
