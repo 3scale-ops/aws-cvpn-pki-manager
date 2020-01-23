@@ -78,7 +78,7 @@ Check Vault's [documentation on the Approle auth backend](https://www.vaultproje
 
 ACPM uses the official golang AWS SDK to interact with AWS APIs, so you can use any auth [method available in the SDK](https://docs.aws.amazon.com/sdk-for-go/v1/developer-guide/configuring-sdk.html).
 
-The AWS credentials need `ec2:ImportClientVpnClientCertificateRevocationList` and `ec2:DescribeClientVpnEndpoints` on the Client VPN endpoint. An example policy:
+The AWS credentials need `ec2:ImportClientVpnClientCertificateRevocationList`, `ec2:ExportClientVpnClientCertificateRevocationList` and `ec2:DescribeClientVpnEndpoints` on the Client VPN endpoint. An example policy:
 
 ```
 {
@@ -89,6 +89,7 @@ The AWS credentials need `ec2:ImportClientVpnClientCertificateRevocationList` an
             "Effect": "Allow",
             "Action": [
                 "ec2:ImportClientVpnClientCertificateRevocationList",
+                "ec2:ExportClientVpnClientCertificateRevocationList",
                 "ec2:DescribeClientVpnEndpoints"
             ],
             "Resource": "*"
