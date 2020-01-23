@@ -393,8 +393,9 @@ func authMiddleware(next http.Handler) http.HandlerFunc {
 				http.Error(w, jsonOutput(map[string]string{"error": "unauthenticated: " + err.Error()}), http.StatusInternalServerError)
 				return
 			}
-			next.ServeHTTP(w, r)
 		}
+		// Hanle request to the next handler in the chain
+		next.ServeHTTP(w, r)
 	}
 }
 
