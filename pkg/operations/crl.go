@@ -3,9 +3,10 @@ package operations
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
+	"reflect"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/hashicorp/vault/api"
@@ -72,14 +73,40 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 	// Upload new CRL to AWS Client VPN endpoint
 	svc := ec2.New(session.New())
 
-	_, err = svc.ImportClientVpnClientCertificateRevocationList(
-		&ec2.ImportClientVpnClientCertificateRevocationListInput{
-			CertificateRevocationList: aws.String(string(crl)),
-			ClientVpnEndpointId:       aws.String(r.ClientVPNEndpointID),
+	cvpnCRL, err := svc.ExportClientVpnClientCertificateRevocationList(
+		&ec2.ExportClientVpnClientCertificateRevocationListInput{
+			ClientVpnEndpointId: aws.String(r.ClientVPNEndpointID),
 		})
 
-	if err != nil && err.(awserr.Error).Code() != "InvalidParameterValue" {
-		return nil, err
+	// Handle the case that no CRL has been uploaded yet. The API
+	// will return a struct without the 'CertificateRevocationList'
+	// property causing an invalid memory address error if not
+	// checked beforehand.
+	if reflect.ValueOf(*cvpnCRL).FieldByName("CertificateRevocationList").Elem().IsValid() {
+		if *cvpnCRL.CertificateRevocationList != string(crl) {
+			// CRL needs update
+			_, err = svc.ImportClientVpnClientCertificateRevocationList(
+				&ec2.ImportClientVpnClientCertificateRevocationListInput{
+					CertificateRevocationList: aws.String(string(crl)),
+					ClientVpnEndpointId:       aws.String(r.ClientVPNEndpointID),
+				})
+			if err != nil {
+				return nil, err
+			}
+			log.Println("Updated CRL in AWS Client VPN endpoint")
+		} else {
+			log.Println("CRL does not need to be updated")
+		}
+	} else {
+		// CRL first time import
+		_, err = svc.ImportClientVpnClientCertificateRevocationList(
+			&ec2.ImportClientVpnClientCertificateRevocationListInput{
+				CertificateRevocationList: aws.String(string(crl)),
+				ClientVpnEndpointId:       aws.String(r.ClientVPNEndpointID),
+			})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return crl, nil
