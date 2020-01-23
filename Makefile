@@ -11,5 +11,9 @@ docker-build: build/aws-cvpn-pki-manager_amd64_$(RELEASE)
 docker-tag-latest: docker-build
 	docker tag quay.io/3scale/aws-cvpn-pki-manager:v$(RELEASE) quay.io/3scale/aws-cvpn-pki-manager:latest
 
+release: docker-tag-latest
+	docker push quay.io/3scale/aws-cvpn-pki-manager:v$(RELEASE)
+	docker push quay.io/3scale/aws-cvpn-pki-manager:latest
+
 clean:
 	rm -rf build/*
