@@ -119,6 +119,14 @@ func RevokeUser(r *RevokeUserRequest) error {
 		return err
 	}
 
+	// Call UpdateCRL to revoke all other certificates
+	_, err = UpdateCRL(
+		&UpdateCRLRequest{
+			Client:              r.Client,
+			VaultPKIPath:        r.VaultPKIPath,
+			ClientVPNEndpointID: r.ClientVPNEndpointID,
+		})
+
 	return nil
 }
 
