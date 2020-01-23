@@ -16,7 +16,7 @@ import (
 // the required data to issue a new certificate
 type ListUsersRequest struct {
 	Client              *api.Client
-	PKIPath             string
+	VaultPKIPath        string
 	ClientVPNEndpointID string
 }
 
@@ -24,7 +24,7 @@ type ListUsersRequest struct {
 func ListUsers(r *ListUsersRequest) (map[string][]Certificate, error) {
 	users := map[string][]Certificate{}
 
-	secret, err := r.Client.Logical().List(fmt.Sprintf("%s/certs", r.PKIPath))
+	secret, err := r.Client.Logical().List(fmt.Sprintf("%s/certs", r.VaultPKIPath))
 	if err != nil {
 		return nil, err
 	}
@@ -32,15 +32,15 @@ func ListUsers(r *ListUsersRequest) (map[string][]Certificate, error) {
 	// Get the updated CRL
 	crl, err := GetCRL(
 		&GetCRLRequest{
-			Client:  r.Client,
-			PKIPath: r.PKIPath,
+			Client:       r.Client,
+			VaultPKIPath: r.VaultPKIPath,
 		})
 	if err != nil {
 		return nil, err
 	}
 
 	for _, key := range secret.Data["keys"].([]interface{}) {
-		secret, err := r.Client.Logical().Read(fmt.Sprintf("%s/cert/%s", r.PKIPath, key))
+		secret, err := r.Client.Logical().Read(fmt.Sprintf("%s/cert/%s", r.VaultPKIPath, key))
 		if err != nil {
 			return nil, err
 		}
@@ -95,7 +95,7 @@ func ListUsers(r *ListUsersRequest) (map[string][]Certificate, error) {
 // the required data to issue a new certificate
 type RevokeUserRequest struct {
 	Client              *api.Client
-	PKIPath             string
+	VaultPKIPath        string
 	Username            string
 	ClientVPNEndpointID string
 }
@@ -107,14 +107,14 @@ func RevokeUser(r *RevokeUserRequest) error {
 	users, err := ListUsers(
 		&ListUsersRequest{
 			Client:              r.Client,
-			PKIPath:             r.PKIPath,
+			VaultPKIPath:        r.VaultPKIPath,
 			ClientVPNEndpointID: r.ClientVPNEndpointID,
 		})
 	if err != nil {
 		return err
 	}
 
-	err = revokeUserCertificates(r.Client, r.PKIPath, users[r.Username], true)
+	err = revokeUserCertificates(r.Client, r.VaultPKIPath, users[r.Username], true)
 	if err != nil {
 		return err
 	}

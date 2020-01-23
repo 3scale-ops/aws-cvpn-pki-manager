@@ -47,7 +47,7 @@ func IssueClientCertificate(r *IssueCertificateRequest) (string, error) {
 	// Issue a new certificate
 	payload := make(map[string]interface{})
 	payload["common_name"] = r.Username
-	crt, err := r.Client.Logical().Write(fmt.Sprintf("%s/issue/%s", r.VaultPKIPaths[0], r.VaultPKIRole), payload)
+	crt, err := r.Client.Logical().Write(fmt.Sprintf("%s/issue/%s", r.VaultPKIPaths[len(r.VaultPKIPaths)-1], r.VaultPKIRole), payload)
 	if err != nil {
 		return "", err
 	}
@@ -109,7 +109,7 @@ func IssueClientCertificate(r *IssueCertificateRequest) (string, error) {
 		_, err = UpdateCRL(
 			&UpdateCRLRequest{
 				Client:              r.Client,
-				PKIPath:             r.VaultPKIPaths[0],
+				VaultPKIPath:        r.VaultPKIPaths[len(r.VaultPKIPaths)-1],
 				ClientVPNEndpointID: r.ClientVPNEndpointID,
 			})
 

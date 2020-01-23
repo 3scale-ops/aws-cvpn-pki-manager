@@ -14,13 +14,13 @@ import (
 // GetCRLRequest is the structure containing
 // the required data to issue a new certificate
 type GetCRLRequest struct {
-	Client  *api.Client
-	PKIPath string
+	Client       *api.Client
+	VaultPKIPath string
 }
 
 // GetCRL return the Client Revocation List PEM as a []byte
 func GetCRL(r *GetCRLRequest) ([]byte, error) {
-	req := r.Client.NewRequest("GET", fmt.Sprintf("/v1/%s/crl/pem", r.PKIPath))
+	req := r.Client.NewRequest("GET", fmt.Sprintf("/v1/%s/crl/pem", r.VaultPKIPath))
 	rsp, err := r.Client.RawRequest(req)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func GetCRL(r *GetCRLRequest) ([]byte, error) {
 // the required data to issue a new certificate
 type UpdateCRLRequest struct {
 	Client              *api.Client
-	PKIPath             string
+	VaultPKIPath        string
 	ClientVPNEndpointID string
 }
 
@@ -47,7 +47,7 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 	users, err := ListUsers(
 		&ListUsersRequest{
 			Client:              r.Client,
-			PKIPath:             r.PKIPath,
+			VaultPKIPath:        r.VaultPKIPath,
 			ClientVPNEndpointID: r.ClientVPNEndpointID,
 		})
 	if err != nil {
@@ -56,7 +56,7 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 
 	//For each user, get the list of certificates, and revoke all of the but the latest
 	for _, crts := range users {
-		err := revokeUserCertificates(r.Client, r.PKIPath, crts, false)
+		err := revokeUserCertificates(r.Client, r.VaultPKIPath, crts, false)
 		if err != nil {
 			return nil, err
 		}
@@ -65,8 +65,8 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 	// Get the updated CRL
 	crl, err := GetCRL(
 		&GetCRLRequest{
-			Client:  r.Client,
-			PKIPath: r.PKIPath,
+			Client:       r.Client,
+			VaultPKIPath: r.VaultPKIPath,
 		})
 
 	// Upload new CRL to AWS Client VPN endpoint

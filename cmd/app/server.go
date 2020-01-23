@@ -61,9 +61,9 @@ func init() {
 	serverCmd.Flags().StringVar(&serverOpts.clientVPNEndpointID, "client-vpn-endpoint-id", "", "The AWS Client VPN endpoint ID")
 	viper.BindPFlag("client-vpn-endpoint-id", serverCmd.Flags().Lookup("client-vpn-endpoint-id"))
 
-	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{}, "The paths where the root CA and any intermediate CAs live in Vault. Must be sorted, the rootCA PKI path has to be last one")
+	serverCmd.Flags().StringSliceVar(&serverOpts.vaultPKIPaths, "vault-pki-paths", []string{}, "The paths where the root CA and any intermediate CAs live in Vault. Must be sorted, the rootCA PKI path has to be the first one")
 	viper.BindPFlag("vault-pki-paths", serverCmd.Flags().Lookup("vault-pki-paths"))
-	viper.SetDefault("vault-pki-paths", []string{"cvpn-pki", "root-pki"})
+	viper.SetDefault("vault-pki-paths", []string{"root-pki", "cvpn-pki"})
 
 	serverCmd.Flags().StringVar(&serverOpts.vaultClientCrtRole, "vault-client-certificate-role", "", "The Vault role used to issue VPN client certificates")
 	viper.BindPFlag("vault-client-certificate-role", serverCmd.Flags().Lookup("vault-client-certificate-role"))
@@ -258,7 +258,7 @@ func revokeUserHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
 		err = operations.RevokeUser(
 			&operations.RevokeUserRequest{
 				Client:              client,
-				PKIPath:             viper.GetStringSlice("vault-pki-paths")[0],
+				VaultPKIPath:        viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
 				Username:            vars["user"],
 				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"),
 			})
@@ -282,8 +282,8 @@ func getCRLHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
 		}
 		crl, err := operations.GetCRL(
 			&operations.GetCRLRequest{
-				Client:  client,
-				PKIPath: viper.GetStringSlice("vault-pki-paths")[0],
+				Client:       client,
+				VaultPKIPath: viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
 			})
 		if err != nil {
 			log.Println(err.Error())
@@ -306,7 +306,7 @@ func updateCRLHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
 		crl, err := operations.UpdateCRL(
 			&operations.UpdateCRLRequest{
 				Client:              client,
-				PKIPath:             viper.GetStringSlice("vault-pki-paths")[0],
+				VaultPKIPath:        viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
 				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"),
 			})
 		if err != nil {
@@ -329,8 +329,8 @@ func listUsersHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
 		}
 		users, err := operations.ListUsers(
 			&operations.ListUsersRequest{
-				Client:  client,
-				PKIPath: viper.GetStringSlice("vault-pki-paths")[0],
+				Client:       client,
+				VaultPKIPath: viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
 			})
 		if err != nil {
 			http.Error(w, jsonOutput(map[string]string{"error": "could not retrieve the user list:\n" + err.Error()}), http.StatusInternalServerError)
