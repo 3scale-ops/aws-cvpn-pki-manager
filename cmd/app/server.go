@@ -167,7 +167,7 @@ func start(vc vault.AuthenticatedClient) {
 		panic("Failed while creating Vault client")
 	}
 	c := cron.New()
-	c.AddFunc("@every 1m", func() {
+	c.AddFunc("@hourly", func() {
 		err = operations.RotateCRL(
 			&operations.RotateCRLRequest{
 				Client:              client,
