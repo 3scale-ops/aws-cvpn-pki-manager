@@ -161,13 +161,14 @@ func runServer(cmd *cobra.Command, args []string) {
 }
 
 func start(vc vault.AuthenticatedClient) {
+
 	// Start RotateCRL cron like task
-	client, err := vc.GetClient()
-	if err != nil {
-		panic("Failed while creating Vault client")
-	}
 	c := cron.New()
 	c.AddFunc("@hourly", func() {
+		client, err := vc.GetClient()
+		if err != nil {
+			panic("Failed while creating Vault client")
+		}
 		err = operations.RotateCRL(
 			&operations.RotateCRLRequest{
 				Client:              client,
