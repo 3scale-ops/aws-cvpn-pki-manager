@@ -55,7 +55,7 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 		return nil, err
 	}
 
-	//For each user, get the list of certificates, and revoke all of the but the latest
+	//For each user, get the list of certificates, and revoke all of them but the latest
 	for _, crts := range users {
 		err := revokeUserCertificates(r.Client, r.VaultPKIPath, crts, false)
 		if err != nil {
@@ -77,6 +77,9 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 		&ec2.ExportClientVpnClientCertificateRevocationListInput{
 			ClientVpnEndpointId: aws.String(r.ClientVPNEndpointID),
 		})
+	if err != nil {
+		return nil, err
+	}
 
 	// Handle the case that no CRL has been uploaded yet. The API
 	// will return a struct without the 'CertificateRevocationList'
@@ -104,10 +107,40 @@ func UpdateCRL(r *UpdateCRLRequest) ([]byte, error) {
 				CertificateRevocationList: aws.String(string(crl)),
 				ClientVpnEndpointId:       aws.String(r.ClientVPNEndpointID),
 			})
+		log.Println("First upload of CRL to the CPN endpoint")
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return crl, nil
+}
+
+// RotateCRLRequest is the structure containing the
+// required data to rotate the Client Revocation List
+type RotateCRLRequest struct {
+	Client              *api.Client
+	VaultPKIPath        string
+	ClientVPNEndpointID string
+}
+
+func RotateCRL(r *RotateCRLRequest) error {
+
+	req := r.Client.NewRequest("GET", fmt.Sprintf("/v1/%s/crl/rotate", r.VaultPKIPath))
+	_, err := r.Client.RawRequest(req)
+	if err != nil {
+		return err
+	}
+
+	_, err = UpdateCRL(
+		&UpdateCRLRequest{
+			Client:              r.Client,
+			VaultPKIPath:        r.VaultPKIPath,
+			ClientVPNEndpointID: r.ClientVPNEndpointID,
+		})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -12,6 +12,7 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/hashicorp/vault/sdk v0.1.13
 	github.com/pkg/errors v0.8.0
+	github.com/robfig/cron v1.2.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.6.1
 	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be

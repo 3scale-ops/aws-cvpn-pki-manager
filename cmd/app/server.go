@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/robfig/cron"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
@@ -142,7 +143,7 @@ func runServer(cmd *cobra.Command, args []string) {
 			Address: viper.GetString("vault-addr"),
 			Token:   viper.GetString("vault-auth-token"),
 		}
-		api(vc)
+		start(vc)
 	} else if viper.IsSet("vault-auth-approle-role-id") &&
 		viper.IsSet("vault-auth-approle-secret-id") &&
 		viper.IsSet("vault-auth-approle-backend-path") {
@@ -153,14 +154,36 @@ func runServer(cmd *cobra.Command, args []string) {
 			SecretID:    viper.GetString("vault-auth-approle-secret-id"),
 			BackendPath: viper.GetString("vault-auth-approle-backend-path"),
 		}
-		api(vc)
+		start(vc)
 	} else {
 		panic("Vault auth config options missing")
 	}
 }
 
-func api(vc vault.AuthenticatedClient) {
-	// Use gorilla/mux as http router
+func start(vc vault.AuthenticatedClient) {
+	// Start RotateCRL cron like task
+	client, err := vc.GetClient()
+	if err != nil {
+		panic("Failed while creating Vault client")
+	}
+	c := cron.New()
+	c.AddFunc("@every 1m", func() {
+		err = operations.RotateCRL(
+			&operations.RotateCRLRequest{
+				Client:              client,
+				VaultPKIPath:        viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
+				ClientVPNEndpointID: viper.GetString("client-vpn-endpoint-id"),
+			})
+		if err != nil {
+			log.Println("Cron procesor failed trying to rotate the CRL")
+			log.Fatal(err)
+		} else {
+			log.Println("Vault CRL rotated by cron processor")
+		}
+	})
+	c.Start()
+
+	// Start the server
 	mux := mux.NewRouter()
 	mux.HandleFunc("/crl", getCRLHandler(vc)).Methods(http.MethodGet)
 	mux.HandleFunc("/crl", updateCRLHandler(vc)).Methods(http.MethodPost)
