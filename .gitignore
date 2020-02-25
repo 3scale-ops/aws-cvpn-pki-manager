@@ -16,3 +16,7 @@ build/
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# terraform temp resources (terraform is used to create test datasets)
+**.terraform
+**/terraform.tfstate*
