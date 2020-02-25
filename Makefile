@@ -19,18 +19,27 @@ release: docker-tag-latest
 clean:
 	rm -rf build/*
 
-# DEV environment
-TF_CMD := docker run -ti -v $$(pwd):/work -w /work --network host hashicorp/terraform:light
-
-dev-env-up:
-	docker run --cap-add=IPC_LOCK -d -p 8200:8200 --name=dev-vault -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' vault:$(VAULT_RELEASE)
+# Dev Vault server
+TF_CMD := docker run --rm -ti -v $$(pwd):/work -w /work --network host hashicorp/terraform:light
+vault-up:
+	docker run --cap-add=IPC_LOCK -d --network host --name=dev-vault -e 'VAULT_DEV_ROOT_TOKEN_ID=myroot' vault:$(VAULT_RELEASE)
 	cd test/tf-dataset1 && \
 		$(TF_CMD) init && \
 		$(TF_CMD) apply --auto-approve
-
-dev-env-down:
+vault-down:
 	docker rm -f $$(docker ps -aqf "name=dev-vault")
 	find test/ -type f -name "*.tfstate*" -exec rm -f {} \;
 
-test:
-	$(MAKE) dev-env-up
+# Dev ACPM server
+ACPM_CMD := docker run --network host -d --name=dev-acpm -v $$(pwd):/work -w /work debian:buster-slim build/aws-cvpn-pki-manager_amd64_$(ACPM_RELEASE) server
+acpm-up:
+	$(ACPM_CMD) --vault-auth-token myroot --client-vpn-endpoint-id "placeholder" --vault-pki-paths pki
+acpm-down:
+	docker rm -f $$(docker ps -aqf "name=dev-acpm")
+
+all-up: vault-up acpm-up
+all-down: acpm-down vault-down
+
+run-tests: all-up
+	docker run --rm -ti --network host --name=curl-runnings -v $$(pwd):/work -w /work debian:buster-slim test/run-integration-tests.sh
+	$(MAKE) all-down
