@@ -15,6 +15,10 @@ This project leverages Hashicop's Vault PKI secret engine to use it as the stora
 * Get the Client Revocation List (CRL)
 * Update the Client Revocation List in your AWS Client VPN
 
+## Project status
+
+ACPM is currently 100% functional but still under active development, mostly in the following areas: testing, documentation and deployment examples.
+
 ## How it works
 
 This project works under the following premises:
