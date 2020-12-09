@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -191,6 +192,8 @@ func start(vc vault.AuthenticatedClient) {
 	mux.HandleFunc("/issue/{user}", issueClientCertificateHandler(vc)).Methods(http.MethodPost)
 	mux.HandleFunc("/revoke/{user}", revokeUserHandler(vc)).Methods(http.MethodPost)
 	mux.HandleFunc("/users", listUsersHandler(vc)).Methods(http.MethodGet)
+	mux.HandleFunc("/healthz", healthzHandler(vc)).Methods(http.MethodGet)
+	mux.HandleFunc("/readyz", healthzHandler(vc)).Methods(http.MethodGet)
 	// Add a logging middleware
 	loggedRouter := handlers.CombinedLoggingHandler(os.Stdout, mux)
 
@@ -366,6 +369,37 @@ func listUsersHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
 	}
 }
 
+func healthzHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client, err := vc.GetClient()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		// Try to do a ListUsers to check health
+		_, err = operations.ListUsers(
+			&operations.ListUsersRequest{
+				Client:       client,
+				VaultPKIPath: viper.GetStringSlice("vault-pki-paths")[len(viper.GetStringSlice("vault-pki-paths"))-1],
+			})
+		if err != nil {
+			http.Error(w, jsonOutput(map[string]string{
+				"status": "ko",
+				"error":  err.Error()}),
+				http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Fprintln(w, jsonOutput(map[string]string{"status": "ok"}))
+	}
+}
+
+func readyzHandler(vc vault.AuthenticatedClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "OK")
+	}
+}
+
 func jsonOutput(rsp map[string]string) string {
 	b, err := json.MarshalIndent(rsp, "", "  ")
 	if err != nil {
@@ -379,8 +413,12 @@ func authMiddleware(next http.Handler) http.HandlerFunc {
 		var err error
 		var token string
 
+		// Check if this is a z endpoint (ie /healthz) in which case
+		// auth should be not enforced
+		zEndpoint, err := regexp.MatchString("(.*)z$", r.URL.Path)
+
 		// GitHub auth enabled
-		if viper.IsSet("auth-github-org") {
+		if !zEndpoint && viper.IsSet("auth-github-org") {
 
 			gh := GithubAuthOpts{
 				Organization: viper.GetString("auth-github-org"),
