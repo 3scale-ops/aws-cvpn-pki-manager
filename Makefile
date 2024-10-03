@@ -1,19 +1,40 @@
-RELEASE=$(shell cat RELEASE)
 
-build: build/aws-cvpn-pki-manager_amd64_$(RELEASE)
+.PHONY: help
 
-build/aws-cvpn-pki-manager_amd64_$(RELEASE):
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o build/aws-cvpn-pki-manager_amd64_$(RELEASE) cmd/main.go
+TAG	?= local
+IMAGE	?= quay.io/3scale/aws-cvpn-pki-manager
+CONTAINER_TOOL ?= podman
 
-docker-build: build/aws-cvpn-pki-manager_amd64_$(RELEASE)
-	docker build . -t quay.io/3scale/aws-cvpn-pki-manager:v$(RELEASE) --build-arg release=$(RELEASE)
+help:
+	@$(MAKE) -pRrq -f $(lastword $(MAKEFILE_LIST)) : 2>/dev/null \
+		| awk -v RS= -F: '/^# File/,/^# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' \
+		| egrep -v -e '^[^[:alnum:]]' -e '^$@$$' | sort
 
-docker-tag-latest: docker-build
-	docker tag quay.io/3scale/aws-cvpn-pki-manager:v$(RELEASE) quay.io/3scale/aws-cvpn-pki-manager:latest
+get-new-release:
+	@hack/new-release.sh v$(TAG)
 
-release: docker-tag-latest
-	docker push quay.io/3scale/aws-cvpn-pki-manager:v$(RELEASE)
-	docker push quay.io/3scale/aws-cvpn-pki-manager:latest
+build-all-release: build
 
-clean:
-	rm -rf build/*
+push-all-release: push
+
+build-all-latest: build-latest
+
+push-all-latest: push-latest
+
+build-all: build
+
+build:
+	${CONTAINER_TOOL} manifest rm $(IMAGE):$(TAG) || echo "No manifest found"
+	${CONTAINER_TOOL} manifest create $(IMAGE):$(TAG)
+	${CONTAINER_TOOL} build \
+		--platform linux/amd64,linux/arm64 \
+		--manifest $(IMAGE):$(TAG) . -f Dockerfile
+
+push:
+	${CONTAINER_TOOL} manifest push $(IMAGE):$(TAG)
+
+build-latest: build
+	${CONTAINER_TOOL} tag $(IMAGE):$(TAG) $(IMAGE):latest
+
+push-latest: build-latest
+	${CONTAINER_TOOL} push $(IMAGE):latest
