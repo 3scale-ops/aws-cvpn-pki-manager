@@ -193,7 +193,7 @@ func start(vc vault.AuthenticatedClient) {
 	mux.HandleFunc("/revoke/{user}", revokeUserHandler(vc)).Methods(http.MethodPost)
 	mux.HandleFunc("/users", listUsersHandler(vc)).Methods(http.MethodGet)
 	mux.HandleFunc("/healthz", healthzHandler(vc)).Methods(http.MethodGet)
-	mux.HandleFunc("/readyz", healthzHandler(vc)).Methods(http.MethodGet)
+	mux.HandleFunc("/readyz", readyzHandler(vc)).Methods(http.MethodGet)
 	// Add a logging middleware
 	loggedRouter := handlers.CombinedLoggingHandler(os.Stdout, mux)
 
